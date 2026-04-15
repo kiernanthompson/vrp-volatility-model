@@ -2,7 +2,6 @@
 # VIX and SPY data collection
 
 library(quantmod)
-install.packages("moments")
 library(moments)
 
 # --- 1. Data pull ---
@@ -281,3 +280,133 @@ cat("99th percentile:", round(quantile(vix_post_clean, 0.99), 2), "\n")
 # estimand of the modelling phase.
 
 # =============================================================
+# Pull OVX (Oil Volatility Index - Middle East risk proxy)
+getSymbols("^OVX", from = "2008-01-01", to = Sys.Date())
+saveRDS(OVX, "data/raw/OVX_raw.rds")
+
+# Quick comparison plot
+par(mfrow = c(2, 1))
+plot(VIX$VIX.Close, main = "VIX 2008-Present", col = "darkblue", ylab = "VIX")
+plot(OVX$OVX.Close, main = "OVX 2008-Present", col = "darkorange", ylab = "OVX")
+par(mfrow = c(1, 1))
+
+# Realised Variance - first steps
+# Step 1: Compute squared daily returns as simple RV proxy
+SPY_returns <- readRDS("data/processed/SPY_returns.rds")
+RV_daily <- SPY_returns^2
+
+# Step 2: 22-day rolling realised variance (approx 1 month)
+library(zoo)
+RV_22day <- rollapply(RV_daily, width = 22, FUN = sum, align = "right", fill = NA)
+
+# Step 3: Annualise
+RV_22day_ann <- RV_22day * 252
+
+# Step 4: VRP = VIX implied variance minus realised variance
+VIX_subset <- VIX$VIX.Close["2008-01-01/"]
+VIX_variance <- (VIX_subset/100)^2 * 252
+
+# Align dates
+combined_vrp <- merge(VIX_variance, RV_22day_ann)
+colnames(combined_vrp) <- c("VIX_implied_var", "Realised_var")
+
+# Step 5: Compute VRP
+combined_vrp$VRP <- combined_vrp$VIX_implied_var - combined_vrp$Realised_var
+
+# Save
+saveRDS(combined_vrp, "data/processed/VRP_estimates.rds")
+
+# Plot VRP over time
+plot(combined_vrp$VRP, 
+     main = "Variance Risk Premium 2008-Present",
+     ylab = "VRP (Implied - Realised Variance)",
+     col = "darkgreen")
+abline(h = 0, col = "red", lty = 2)
+
+cat("OVX and VRP pipeline complete\n")
+
+# Check for negative VRP
+cat("Min VRP:", min(combined_vrp$VRP, na.rm = TRUE), "\n")
+cat("Days negative:", sum(combined_vrp$VRP < 0, na.rm = TRUE), "\n")
+
+# Forward-aligned RV - what actually happened 
+# over the NEXT 22 days after each VIX observation
+RV_forward <- rollapply(RV_daily, width = 22, 
+                        FUN = sum, 
+                        align = "left",  # changed from "right" to "left"
+                        fill = NA)
+
+RV_forward_ann <- RV_forward * 252
+
+# Rebuild VRP with forward-aligned RV
+VIX_subset2 <- VIX$VIX.Close["2008-01-01/"]
+VIX_variance2 <- (VIX_subset2/100)^2 * 252
+
+combined_vrp2 <- merge(VIX_variance2, RV_forward_ann)
+colnames(combined_vrp2) <- c("VIX_implied_var", "Realised_var_forward")
+combined_vrp2$VRP_forward <- combined_vrp2$VIX_implied_var - combined_vrp2$Realised_var_forward
+
+# Check
+cat("Min VRP forward:", min(combined_vrp2$VRP_forward, na.rm = TRUE), "\n")
+cat("Days negative:", sum(combined_vrp2$VRP_forward < 0, na.rm = TRUE), "\n")
+
+# Plot comparison
+par(mfrow = c(2, 1))
+plot(combined_vrp$VRP,
+     main = "VRP - Backward Aligned (original)",
+     col = "darkgreen", ylab = "VRP")
+abline(h = 0, col = "red", lty = 2)
+
+plot(combined_vrp2$VRP_forward,
+     main = "VRP - Forward Aligned (theoretically correct)",
+     col = "darkblue", ylab = "VRP")
+abline(h = 0, col = "red", lty = 2)
+par(mfrow = c(1, 1))
+
+saveRDS(combined_vrp2, "data/processed/VRP_forward_estimates.rds")
+
+# NOTE: Backward-aligned RV (align = "right") produces 
+# structurally positive VRP due to measurement lag —
+# VIX leads realised volatility during crisis onset.
+# Minimum backward VRP = 2.03, never crosses zero,
+# confirming the lag prevents true sign-switching.
+#
+# Forward-aligned RV (align = "left") is theoretically 
+# correct — compares VIX implied variance on day T to 
+# realised variance over subsequent 22 trading days.
+# Forward VRP approaches and crosses zero briefly
+# in the post-COVID recovery period spanning late 
+# 2020 into 2021 — realised volatility temporarily 
+# exceeded VIX implied variance as the recovery 
+# was more turbulent than the market anticipated
+# at each forward observation point.
+#
+# Key observation: Both series share broadly similar
+# shape and crisis timing — same dominant spikes,
+# same calm baseline periods. The 2020 spike magnitudes
+# are near-identical across both series. The 2008 spike
+# appears slightly larger in the forward-aligned series,
+# consistent with realised volatility continuing to 
+# accumulate beyond the initial VIX peak during the
+# prolonged GFC stress period.
+#
+# Notable: 2008 and 2020 dominate both series as the
+# two principal crisis regimes in the sample period,
+# with all other stress episodes producing materially
+# smaller VRP spikes — consistent with the bimodal
+# regime structure identified in the descriptive analysis.
+#
+# Current (2024-2025) VRP elevated above post-2016 
+# calm baseline in both series — consistent with 
+# elevated macro uncertainty around tariffs, Middle 
+# East risk, and Fed policy path.
+#
+# Limitation: forward alignment introduces look-ahead 
+# bias in any real-time trading application — 
+# model-implied posterior predictive variance is the 
+# correct forward-looking comparison in the full model,
+# replacing the naive rolling RV measure entirely.
+
+
+
+
