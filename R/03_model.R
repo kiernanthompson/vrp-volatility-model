@@ -3,6 +3,7 @@
 
 library(rugarch)
 library(xts)
+library (zoo)
 
 # Load data
 SPY_returns <- readRDS("data/processed/SPY_returns.rds")
@@ -337,3 +338,62 @@ saveRDS(fit_gjr_t, "data/processed/GJR_GARCH_t_fit.rds")
 # GJR Student-t:     LL=21634, AIC=-6.5450 (+144)
 # Each extension decisive. Remaining failure structural.
 
+# ============================================
+# MODEL 4: HAR-RV: REALISED VOLATILITY BENCHMARK
+# ============================================
+# RV proxy: squared daily returns (placeholder)
+# Replace with Oxford-Man or WRDS intraday RV when available
+
+# Construct RV proxy — squared daily returns
+RV_daily <- as.numeric(SPY_returns)^2
+
+# HAR components — daily, weekly, monthly averages
+RV_lag1  <- lag(zoo(RV_daily), -1)
+RV_lag5  <- rollmean(zoo(RV_daily), 5, align = "right", fill = NA)
+RV_lag22 <- rollmean(zoo(RV_daily), 22, align = "right", fill = NA)
+
+# Align into dataframe
+har_data <- na.omit(data.frame(
+  RV      = RV_daily[-c(1:22)],
+  RV_d    = lag(zoo(RV_daily), 1, na.pad = TRUE)[-c(1:22)],
+  RV_w    = as.numeric(RV_lag5)[-c(1:22)],
+  RV_m    = as.numeric(RV_lag22)[-c(1:22)]
+))
+
+# Fit HAR model
+har_fit <- lm(RV ~ RV_d + RV_w + RV_m, data = har_data)
+summary(har_fit)
+
+# Save
+saveRDS(har_fit, "data/processed/HAR_RV_fit.rds")
+saveRDS(har_data, "data/processed/HAR_RV_data.rds")
+
+# HAR-RV DIAGNOSTICS
+# All three components significant; heterogeneous
+# volatility structure confirmed across daily,
+# weekly and monthly horizons.
+# RV_w dominates (1.062) - weekly volatility is
+# primary predictor of next-day RV.
+# R-squared = 0.429; benchmark for calibration
+# comparison against Bayesian model.
+# NOTE: RV proxy is squared daily returns.
+# Replace with WRDS intraday 5-min RV when
+# access confirmed - will improve R-squared
+# and sharpen benchmark comparison.
+
+# ============================================
+# MODEL 5: MARKOV-SWITCHING GARCH: REGIME BENCHMARK
+# ============================================
+# Package: MSwM
+# install.packages("MSwM")
+
+# ============================================
+# MODEL 6: SINGLE-REGIME BAYESIAN SV: UNCERTAINTY BENCHMARK
+# ============================================
+# Package: stochvol
+# install.packages("stochvol")
+
+# ============================================
+# MODEL 7: BAYESIAN HIERARCHICAL REGIME-SWITCHING
+# ============================================
+# See 04_simulate.R
