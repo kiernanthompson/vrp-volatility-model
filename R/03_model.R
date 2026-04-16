@@ -7,6 +7,9 @@ library(xts)
 # Load data
 SPY_returns <- readRDS("data/processed/SPY_returns.rds")
 
+# ============================================
+# MODEL 1: GARCH(1,1) NORMAL: BASELINE
+# ============================================
 # Specify GARCH(1,1) with normal errors — the Basel standard
 spec_basic <- ugarchspec(
   variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
@@ -118,7 +121,7 @@ cat("Average difference:", round(mean(vix_plot - vol_plot, na.rm=TRUE), 2), "\n"
 saveRDS(fit_basic, "data/processed/GARCH_baseline_fit.rds")
 saveRDS(vol_basic, "data/processed/GARCH_vol_baseline.rds")
 
-# GARCH(1,1) BASELINE DIAGNOSTICS - KEY FINDINGS
+# GARCH(1,1) BASELINE
 # Parameters: alpha1 = 0.1247, beta1 = 0.8563
 # Persistence = 0.981 - slow mean reversion confirmed
 # High beta1 relative to alpha1 - model reacts slowly
@@ -165,14 +168,14 @@ saveRDS(vol_basic, "data/processed/GARCH_vol_baseline.rds")
 # for the full model; not just theoretical preference
 # but formal statistical rejection of the baseline.
 
-# GARCH vs VIX
+# NOTE: GARCH vs VIX
 # Average GARCH vol: 16.76%
 # Average VIX: 19.85%
 # Average VRP (VIX - GARCH): 3.09 percentage points
 # Consistent with Bollerslev, Tauchen and Zhou (2009)
 # canonical VRP documentation.
 #
-# VISUAL:
+# VISUALLY:
 # 1. GARCH lags VIX at crisis peaks - slow reaction
 #    confirmed visually. Beta1 = 0.856 persistence
 #    anchors estimates to recent history, preventing
@@ -202,3 +205,135 @@ saveRDS(vol_basic, "data/processed/GARCH_vol_baseline.rds")
 # (iii) Produce calibrated tail uncertainty
 # All three failures motivate hierarchical
 # Bayesian extension with regime switching.
+
+# ============================================
+# MODEL 2: GJR-GARCH(1,1) NORMAL: ASYMMETRIC
+# ============================================
+spec_gjr <- ugarchspec(
+  variance.model = list(model = "gjrGARCH", garchOrder = c(1,1)),
+  mean.model = list(armaOrder = c(0,0), include.mean = TRUE),
+  distribution.model = "norm"
+)
+
+fit_gjr <- ugarchfit(spec = spec_gjr, data = SPY_returns)
+
+show(fit_gjr)
+
+saveRDS(fit_gjr, "data/processed/GJR_GARCH_fit.rds")
+
+# COMPARISON: GARCH vs GJR-GARCH
+#
+# Log-likelihood:
+# GARCH(1,1) normal:    21,354.89
+# GJR-GARCH(1,1) normal: 21,490.38
+# Improvement: +135.49 — decisive
+#
+# AIC:
+# GARCH:    -6.4612
+# GJR-GARCH: -6.5019
+# Improvement: -0.0407 — GJR preferred
+#
+# Nyblom Joint Statistic:
+# GARCH:    15.794 (CV 1% = 1.60) — severe non-stationarity
+# GJR-GARCH: 4.041 (CV 1% = 1.88) — improved, still significant
+# Interpretation: asymmetry misspecification was masking
+# as non-stationarity in baseline. Genuine regime
+# non-stationarity remains after asymmetry correction.
+#
+# Sign Bias Test Joint Effect:
+# GARCH:    p = 2.772e-09 — symmetric and asymmetric bias
+# GJR-GARCH: p = 4.847e-06 — positive bias resolved,
+#             negative bias remains regime-dependent
+# Interpretation: GJR captures average asymmetry but
+# not regime-varying asymmetry. Crisis-regime negative
+# shock response exceeds average gamma estimate.
+#
+# Pearson GOF:
+# GARCH:    p ≈ 0 — fat tails not captured
+# GJR-GARCH: p ≈ 0 — fat tails not captured
+# Normal distribution rejected in both — Student-t required
+#
+# KEY FINDING: GJR-GARCH reveals alpha1 ≈ 0 (p = 0.984)
+# Positive return shocks have no effect on future volatility
+# Entire shock transmission operates through negative
+# channel: alpha1 + gamma1 = 0.1886 for negative shocks
+# vs alpha1 = 0.000054 for positive shocks
+# Leverage effect more extreme than symmetric model implied
+#
+# REMAINING FAILURES MOTIVATING FURTHER EXTENSION:
+# 1. Fat tails; Student-t errors needed
+# 2. Regime-varying asymmetry; regime-switching needed
+# 3. Parameter non-stationarity; hierarchical prior needed
+
+# ============================================
+# MODEL 3: GJR-GARCH(1,1) STUDENT-T: FAT TAILS
+# ============================================
+
+spec_gjr_t <- ugarchspec(
+  variance.model = list(model = "gjrGARCH", garchOrder = c(1,1)),
+  mean.model = list(armaOrder = c(0,0), include.mean = TRUE),
+  distribution.model = "std"
+)
+
+fit_gjr_t <- ugarchfit(spec = spec_gjr_t, data = SPY_returns)
+
+show(fit_gjr_t)
+
+saveRDS(fit_gjr_t, "data/processed/GJR_GARCH_t_fit.rds")
+
+# COMMENT: GJR-GARCH(1,1) STUDENT-T DIAGNOSTICS
+#
+# Shape parameter: 6.788 (p < 0.001)
+# Fat tails confirmed — substantially below normal
+# (infinite df). Consistent with post-2008 kurtosis
+# finding of 11.97.
+#
+# Alpha1: ~0 (p = 0.9999)
+# Symmetric shock component completely absent.
+# All volatility transmission through negative
+# shock channel: gamma1 = 0.2188.
+# Leverage effect estimate increases with correct
+# distributional specification.
+#
+# Log-likelihood: 21,633.96 (+143 vs GJR normal)
+# AIC: -6.5450 (improved from -6.5019)
+# Student-t extension decisively justified.
+#
+# CRITICAL FINDING — Nyblom Joint: 91.19
+# Dramatic increase from GJR normal (4.041).
+# Omega individual: 20.895 — unconditional variance
+# level massively unstable across sample.
+# Interpretation: Normal model used distributional
+# misspecification as crutch to absorb regime shifts.
+# Student-t correctly attributes tail observations
+# to fat-tailed distribution, exposing true magnitude
+# of regime non-stationarity previously hidden.
+# This is model honesty, not model failure.
+#
+# Sign Bias: Negative Sign Bias worsens (p=0.000626)
+# Same mechanism — normal model absorbed asymmetric
+# tail behaviour through inflated variance estimates.
+# Student-t exposes residual regime-dependent asymmetry.
+#
+# Pearson GOF: Improved substantially (110-160 vs
+# 179-306) but still rejected (p ≈ 0).
+# Remaining misfit is structural — regime
+# non-stationarity not addressable through
+# distributional choice alone.
+#
+# CONCLUSION: Three-model ladder establishes that
+# remaining misspecification is structural, not
+# parametric. Single-regime models with fixed
+# parameters cannot characterise this data regardless
+# of asymmetry or distributional specification.
+# Regime-switching is formally necessitated —
+# not a modelling preference but an empirical
+# requirement demonstrated sequentially across
+# three increasingly well-specified models.
+#
+# MODEL COMPARISON SUMMARY:
+# GARCH normal:      LL=21354, AIC=-6.4612
+# GJR normal:        LL=21490, AIC=-6.5019 (+136)
+# GJR Student-t:     LL=21634, AIC=-6.5450 (+144)
+# Each extension decisive. Remaining failure structural.
+
