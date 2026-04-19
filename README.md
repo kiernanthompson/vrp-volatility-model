@@ -3,7 +3,7 @@
 A bayesian hierarchical framework for uncertainty quantification in equity volatility markets. 
 This project develops and evaluates a regime-shifting stochastic volatility model as a correctly specified alternative to single-regime GARCH-class models, evalauted on calibration rather than point forecast accuracy.
 ## Application
-Standard volatility models produce joint point estimates with limited uncertainty characterisation. For risk management, regulatory capital and policy applications, the full predictive distribution over future realised variance matters more than central tendency. This project examines whether Bayesian hierarchical models with regime-switching structure produce better "calibrated" posterior predictive distributions than existing benchmarks, while characterising the variance risk as a time-varying posterior discrepancy between market-implied and model-implied uncertainty.
+Standard volatility models produce joint point estimates with limited uncertainty characterisation. For risk management, regulatory capital and policy applications, the full predictive distribution over future realised variance matters more than central tendency. This project examines whether Bayesian hierarchical models with regime-switching structure produce better "calibrated" posterior predictive distributions than existing benchmarks while characterising the variance risk as a time-varying posterior discrepancy between market-implied and model-implied uncertainty.
 ## Structure
 - 'data/raw/' original data pulls (e.g., VIX, SPY, OVX)
 - 'data/processed/' cleaned data and model outputs
