@@ -4,6 +4,7 @@
 library(rugarch)
 library(xts)
 library (zoo)
+library(MSwM)
 
 # Load data
 SPY_returns <- readRDS("data/processed/SPY_returns.rds")
@@ -11,7 +12,6 @@ SPY_returns <- readRDS("data/processed/SPY_returns.rds")
 # ============================================
 # MODEL 1: GARCH(1,1) NORMAL: BASELINE
 # ============================================
-# Specify GARCH(1,1) with normal errors — the Basel standard
 spec_basic <- ugarchspec(
   variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
   mean.model = list(armaOrder = c(0,0), include.mean = TRUE),
@@ -269,7 +269,6 @@ saveRDS(fit_gjr, "data/processed/GJR_GARCH_fit.rds")
 # ============================================
 # MODEL 3: GJR-GARCH(1,1) STUDENT-T: FAT TAILS
 # ============================================
-
 spec_gjr_t <- ugarchspec(
   variance.model = list(model = "gjrGARCH", garchOrder = c(1,1)),
   mean.model = list(armaOrder = c(0,0), include.mean = TRUE),
@@ -384,8 +383,74 @@ saveRDS(har_data, "data/processed/HAR_RV_data.rds")
 # ============================================
 # MODEL 5: MARKOV-SWITCHING GARCH: REGIME BENCHMARK
 # ============================================
-# Package: MSwM
-# install.packages("MSwM")
+returns_numeric <- as.numeric(SPY_returns)
+returns_clean <- returns_numeric[!is.na(returns_numeric)]
+
+# Fit simple linear model first — MSwM requires an lm object
+simple_lm <- lm(returns_clean ~ 1)
+
+# Fit Markov-switching model with 2 regimes
+# k = 2 regimes, p = 1 autoregressive order, sw = which params switch
+ms_fit <- msmFit(simple_lm, 
+                 k = 2,
+                 p = 1,
+                 sw = c(TRUE, TRUE, TRUE))
+
+# Inspect
+summary(ms_fit)
+
+# Save
+saveRDS(ms_fit, "data/processed/MS_GARCH_fit.rds")
+
+# COMMENT: MS GARCH
+# Two regimes identified endogenously from data:
+# REGIME 1 (Calm):
+#   Mean return: +0.0009 (positive drift)
+#   Daily volatility: 0.696%
+#   Annualised volatility: ~11%
+#   Consistent with VIX levels 10-15
+#
+# REGIME 2 (Elevated/Crisis):
+#   Mean return: -0.0009 (negative drift)  
+#   Daily volatility: 1.925%
+#   Annualised volatility: ~30.6%
+#   Consistent with VIX levels 25-40
+#
+# Volatility ratio: 2.77x between regimes
+# Confirms substantial regime heterogeneity
+# that single-regime models cannot accommodate.
+#
+# TRANSITION PROBABILITIES:
+#   Calm --> Calm:   0.988
+#   Calm --> Crisis: 0.028
+#   Crisis --> Crisis: 0.972
+#   Crisis --> Calm: 0.012
+#
+# Both regimes highly persistent - changes are
+# rare events consistent with discrete regime
+# shifts rather than gradual parameter drift.
+# 
+# LEVERAGE EFFECT CONFIRMED AT REGIME LEVEL:
+# Crisis regime has negative mean return,
+# calm regime has positive mean return.
+# Independently validates volatility-return
+# asymmetry finding from Sign Bias Test.
+#
+# LIMITATION: MSwM fits Markov-switching mean
+# model with regime-dependent residual variance,
+# not full Markov-switching GARCH with regime-
+# dependent persistence. Simpler than Haas
+# Mittnik Paolella 2004 specification but
+# sufficient to establish regime benchmark
+# for comparison against Bayesian hierarchical
+# model.
+#
+# AIC: -42242 (best-fitting model in ladder)
+# Dramatic improvement over GJR-Student-t 
+# AIC of -6.545 scale is different because
+# of likelihood calculation differences across
+# packages - not directly comparable.
+# Within-package comparisons only are valid.
 
 # ============================================
 # MODEL 6: SINGLE-REGIME BAYESIAN SV: UNCERTAINTY BENCHMARK
