@@ -16,6 +16,7 @@ The project evaluates whether stochastic volatility models with heavy tails, lev
 - Equity returns: SPY (via quantmod)
 - Realised variance: constructed from WRDS TAQ intraday data (in progress)
 - Macro covariates: FRED (in development)
+
 Large datasets (e.g., TAQ) are not stored in this repository.
 
 ## Methodology
@@ -25,6 +26,7 @@ Models are compared in an ablation sequence to isolate the contribution of indiv
 - SV with leverage (asymmetry)
 - SV with regime switching
 - Hierarchical regime-switching SV (primary contribution)
+
 Bayesian estimation uses Hamiltonian Monte Carlo via Stan.
 For reference against standard approaches, additional benchmarks include GARCH-family models and HAR-RV.
 
@@ -34,6 +36,7 @@ Model performance is evaluated using distributional metrics:
 - Probability integral transform (PIT) diagnostics
 - Continuous ranked probability score (CRPS)
 - Tail behaviour and coverage properties
+
 The focus is on calibration and distributional accuracy, not point forecast performance.
 
 ## Structure
