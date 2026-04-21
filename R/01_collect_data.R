@@ -9,15 +9,27 @@ library(moments)
 getSymbols("^VIX", from = "2000-01-01", to = Sys.Date())
 # B. Pull SPY
 getSymbols("SPY", from = "2000-01-01", to = Sys.Date())
+# C. Pull OVX
+getSymbols("^OVX", from = "2008-01-01", to = Sys.Date())
 
 # Save raw data
 saveRDS(VIX, "data/raw/VIX_raw.rds")
 saveRDS(SPY, "data/raw/SPY_raw.rds")
+saveRDS(OVX, "data/raw/OVX_raw.rds")
 
 # Check
-cat("Data pulled successfully\n")
 file.exists("data/raw/VIX_raw.rds")
 file.exists("data/raw/SPY_raw.rds")
+
+cat("Data pulled successfully\n")
+
+# Compute and save returns
+SPY_returns <- dailyReturn(SPY$SPY.Adjusted)
+
+# Save returns to processed
+saveRDS(SPY_returns, "data/processed/SPY_returns.rds")
+file.exists("data/processed/SPY_returns.rds")
+cat("Data pipeline complete\n")
 
 # --- 2. Data check and structure ---
 # Load and inspect
@@ -35,11 +47,7 @@ nrow(VIX) ## ~6000
 plot(VIX$VIX.Close, main = "VIX 2000-present", ylab = "VIX", col = "darkblue")
 
 # Basic SPY returns
-SPY_returns <- dailyReturn(SPY$SPY.Adjusted)
 plot(SPY_returns, main = "SPY Daily Returns", col = "darkred")
-
-# Save returns to processed
-saveRDS(SPY_returns, "data/processed/SPY_returns.rds")
 
 # Merge VIX and SPY returns
 combined <- merge(VIX$VIX.Close, SPY_returns)
@@ -280,10 +288,7 @@ cat("99th percentile:", round(quantile(vix_post_clean, 0.99), 2), "\n")
 # estimand of the modelling phase.
 
 # =============================================================
-# Pull OVX (Oil Volatility Index - Middle East risk proxy)
-getSymbols("^OVX", from = "2008-01-01", to = Sys.Date())
-saveRDS(OVX, "data/raw/OVX_raw.rds")
-
+# OVX (Oil Volatility Index - Middle East risk proxy)
 # Quick comparison plot
 par(mfrow = c(2, 1))
 plot(VIX$VIX.Close, main = "VIX 2008-Present", col = "darkblue", ylab = "VIX")
@@ -407,9 +412,3 @@ saveRDS(combined_vrp2, "data/processed/VRP_forward_estimates.rds")
 # correct forward-looking comparison in the full model,
 # replacing the naive rolling RV measure entirely.
 # =============================================================
-# Pull Oxford-Man Realised Variance or equivalent using WRDS
-
-
-
-
-

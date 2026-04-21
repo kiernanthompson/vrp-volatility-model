@@ -1,0 +1,11 @@
+# R
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# model outputs
+data/processed/*.rds
+
+# OS
+.DS_Store

@@ -1,10 +1,9 @@
-# 03_model.R
+# 03_model_baselines.R
 ## (1) GARCH(1,1) NORMAL
 ## (2) GJR-GARCH(1,1) NORMAL
 ## (3) GJR-GARCH(1,1) STUDENT-T
 ## (4) HAR-RV
 ## (5) MARKOV-SWITCHING GARCH
-## (6) SINGLE-REGIME BAYESIAN SV
 
 library(rugarch)
 library(xts)
@@ -457,77 +456,3 @@ saveRDS(ms_fit, "data/processed/MS_GARCH_fit.rds")
 # of likelihood calculation differences across
 # packages - not directly comparable.
 # Within-package comparisons only are valid.
-
-# ============================================
-# MODEL 6: SINGLE-REGIME BAYESIAN SV: UNCERTAINTY BENCHMARK
-# ============================================
-# Demean returns (standard pre-processing for SV models)
-returns_demeaned <- returns_clean - mean(returns_clean)
-
-# Fit Bayesian stochastic volatility model
-# Default specification: log-volatility follows AR(1) with Normal innovations
-# Priors: standard weakly informative defaults
-set.seed(42)
-sv_fit <- svsample(returns_demeaned, 
-                   draws = 5000,
-                   burnin = 1000,
-                   quiet = FALSE)
-
-# Inspect posterior summary
-summary(sv_fit)
-
-# Save
-saveRDS(sv_fit, "data/processed/Bayesian_SV_fit.rds")
-
-# COMMENT: BAYESIAN SV
-# POSTERIOR ESTIMATES:
-# mu = -9.457 (95% CI: -9.66 to -9.26)
-#   Long-run log-volatility mean
-#   Implied annualised vol: ~14.1%
-#   Consistent with historical averages
-#
-# phi = 0.976 (95% CI: 0.970 to 0.982)
-#   Log-volatility AR(1) persistence
-#   Near-unit-root behaviour confirmed
-#   Slow mean reversion consistent with SV literature
-#
-# sigma = 0.226 (95% CI: 0.204 to 0.249)
-#   Volatility of log-volatility
-#   Stochastic innovation in latent vol process
-#   First direct evidence of genuine volatility
-#   variation beyond deterministic GARCH structure
-#
-# CONVERGENCE:
-# ESS: mu = 2454, phi = 176, sigma = 84
-# No divergences or warnings
-# Lower ESS for phi and sigma typical of SV models
-# Substantive inference sound despite lower ESS
-#
-# METHODOLOGICAL CONTRIBUTION OVER GARCH:
-# Treats volatility as latent stochastic process
-# rather than deterministic function of returns.
-# Produces posterior distribution over latent
-# volatility at each time point rather than
-# point estimate. This is the first model in the
-# ladder producing genuine uncertainty
-# quantification; benchmark against which the
-# hierarchical regime-switching model's
-# additional contribution will be evaluated.
-#
-# LIMITATION: Single-regime specification.
-# Cannot accommodate regime non-stationarity
-# documented in Nyblom tests. Will produce
-# posterior credible intervals that are too
-# tight in some periods and too wide in others
-# because the single distributional structure
-# averages across qualitatively different regimes.
-#
-# NEXT STEP: Hierarchical regime-switching
-# Bayesian SV: combines regime structure from
-# MS-GARCH with Bayesian uncertainty quantification
-# from single-regime SV into unified framework.
-
-# ============================================
-# MODEL 7: BAYESIAN HIERARCHICAL REGIME-SWITCHING
-# ============================================
-# See 04_simulate.R
