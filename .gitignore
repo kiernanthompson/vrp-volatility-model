@@ -3,3 +3,6 @@
 .RData
 .Ruserdata
 data/raw/
+data/processed/*.rds
+
+.DS_Store
