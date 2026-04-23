@@ -17,10 +17,12 @@ SPY_returns <- readRDS("data/processed/SPY_returns.rds")
 # ============================================
 # ABLATION STEP 1: SINGLE-REGIME BAYESIAN SV (Baseline)
 # ============================================
+library(stochvol)
+
+# Load returns
+SPY_returns <- readRDS("data/processed/SPY_returns.rds")
 returns_numeric <- as.numeric(SPY_returns)
 returns_clean <- returns_numeric[!is.na(returns_numeric)]
-
-# Demean returns (standard pre-processing for SV models)
 returns_demeaned <- returns_clean - mean(returns_clean)
 
 # Fit Bayesian stochastic volatility model
@@ -135,5 +137,78 @@ saveRDS(sv_t_fit, "data/processed/SV_t_fit.rds")
 # ============================================
 # ABLATION STEP 3: SV WITH LEVERAGE (SVL specification)
 # ============================================
-# Isolates asymmetry contribution
+# rho no longer constrained to zero (isolates asymmetry contribution)
+library(stochvol)
+
+# Load returns
+SPY_returns <- readRDS("data/processed/SPY_returns.rds")
+returns_numeric <- as.numeric(SPY_returns)
+returns_clean <- returns_numeric[!is.na(returns_numeric)]
+returns_demeaned <- returns_clean - mean(returns_clean)
+
+# Fit with Student-t innovations AND leverage
+set.seed(42)
+sv_tl_fit <- svsample(returns_demeaned,
+                      draws = 5000,
+                      burnin = 1000,
+                      priorspec = specify_priors(
+                        nu = sv_exponential(0.1),
+                        rho = sv_beta(4, 4)
+                      ),
+                      quiet = FALSE)
+
+# Inspect
+summary(sv_tl_fit)
+
+# Save
+saveRDS(sv_tl_fit, "data/processed/SV_tl_fit.rds")
+
+# Re-run with more iterations/ thinning (ESS deterioration)
+set.seed(42)
+sv_tl_fit <- svsample(returns_demeaned,
+                      draws = 20000,
+                      burnin = 5000,
+                      thinpara = 4,
+                      priorspec = specify_priors(
+                        nu = sv_exponential(0.1),
+                        rho = sv_beta(4, 4)
+                      ),
+                      quiet = FALSE)
+
+# Inspect
+summary(sv_tl_fit)
+
+# COMMENT: SV with leverage (extended run)
+# 20000 draws, 5000 burnin, thinpara = 4
+#
+# POSTERIOR ESTIMATES:
+# mu    = -9.41  (95% CI: -9.53 to -9.28)
+# phi   =  0.969 (95% CI: 0.964 to 0.974)
+# sigma =  0.257 (95% CI: 0.232 to 0.279)
+# nu    = 14.77  (95% CI: 11.2 to 19.8)
+# rho   = -0.733 (95% CI: -0.767 to -0.694)
+#
+# ESS adequate across all parameters after extended run.
+# Substantive findings match shorter initial run,
+# confirming earlier interpretation was correct
+# despite insufficient ESS in initial fit.
+#
+# KEY FINDINGS:
+# 1. Strong leverage effect within SV framework
+#    (rho ≈ -0.73, consistent with literature)
+# 2. Heavy-tail estimate stable under leverage
+#    (nu ≈ 14.8, substantially higher than GARCH 6.8)
+# 3. High persistence maintained (phi ≈ 0.97)
+#
+# ABLATION CONTRIBUTION:
+# SV with leverage adds strong asymmetric component
+# while maintaining thinner-tail estimates than
+# GARCH-based analyses suggest. Supports conclusion
+# that correct SV specification captures tail
+# behaviour through volatility dynamics rather
+# than requiring extreme innovation tails.
+
+# ============================================
+# ABLATION STEP 4: SV WITH REGIME SWITCHING
+# ============================================
 

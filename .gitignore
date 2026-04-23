@@ -6,3 +6,4 @@ data/raw/
 data/processed/*.rds
 
 .DS_Store
+.positai
