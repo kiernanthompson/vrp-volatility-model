@@ -11,3 +11,5 @@ models/*.rds
 models/stan/*.rds
 outputs/models/*.rds
 outputs/models/*.rds
+data/raw/*.rds
+data/*.rds
