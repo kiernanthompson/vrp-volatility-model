@@ -7,3 +7,5 @@ data/processed/*.rds
 
 .DS_Store
 .positai
+models/*.rds
+models/stan/*.rds
