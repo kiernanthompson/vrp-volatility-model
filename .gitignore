@@ -10,3 +10,4 @@ data/processed/*.rds
 models/*.rds
 models/stan/*.rds
 outputs/models/*.rds
+outputs/models/*.rds
