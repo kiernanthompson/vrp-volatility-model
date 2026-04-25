@@ -9,3 +9,4 @@ data/processed/*.rds
 .positai
 models/*.rds
 models/stan/*.rds
+outputs/models/*.rds
