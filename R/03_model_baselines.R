@@ -343,7 +343,7 @@ saveRDS(fit_gjr_t, "data/processed/GJR_GARCH_t_fit.rds")
 # Each extension decisive. Remaining failure structural.
 
 # ============================================
-# MODEL 4: HAR-RV: REALISED VOLATILITY BENCHMARK
+# MODEL 4A: HAR-RV: REALISED VOLATILITY BENCHMARK
 # ============================================
 # RV proxy: squared daily returns (placeholder)
 # Replace with WRDS intraday RV*
@@ -384,6 +384,80 @@ saveRDS(har_data, "data/processed/HAR_RV_data.rds")
 # Replace with WRDS intraday 5-min RV when
 # access confirmed - will improve R-squared
 # and sharpen benchmark comparison.
+
+# ============================================
+# MODEL 4B: HAR-RV-omi: REALISED VOLATILITY BENCHMARK
+# ============================================
+# HAR-RV refit using the archived Oxford-Man Institute realized library
+# Replaces the planned WRDS TAQ pull. SPX rv5 is the canonical series
+# for VRP work since VIX is SPX-options-based.
+
+library(bvhar)      # ships OMI snapshot
+library(dplyr)
+library(zoo)
+library(tidyr)
+library(broom)
+library(here)
+library(lmtest)
+library(sandwich)
+
+# ---- 1. Inspect bundles --------------------------------------------
+data(package = "bvhar")
+ls("package:bvhar")
+str(etf_vix)
+
+install.packages("highfrequency")
+library(highfrequency)
+data(package = "highfrequency")
+
+## SPYRM - RV5
+data(SPYRM)
+str(SPYRM)
+colnames(SPYRM)
+head(SPYRM)
+
+# ---- 2. Build HAR regressors --------------------------------------------
+har <- SPYRM %>%
+  arrange(DT) %>%
+  transmute(
+    date    = DT,
+    rv      = RV5,
+    rv_d    = rv,
+    rv_w    = rollmean(rv, k = 5,  fill = NA, align = "right"),
+    rv_m    = rollmean(rv, k = 22, fill = NA, align = "right"),
+    rv_lead = lead(rv, 1)
+  ) %>%
+  drop_na()
+
+cat(sprintf("HAR sample: %d obs, %s to %s\n",
+            nrow(har), min(har$date), max(har$date)))
+
+# ---- 3. Fit levels and log-log ---------------------------------------------
+fit_lvl <- lm(rv_lead ~ rv_d + rv_w + rv_m, data = har)
+fit_log <- lm(log(rv_lead) ~ log(rv_d) + log(rv_w) + log(rv_m), data = har)
+
+# Newey-West HAC SEs, 22-lag
+nw_lvl <- coeftest(fit_lvl, vcov. = NeweyWest(fit_lvl, lag = 22, prewhite = FALSE))
+nw_log <- coeftest(fit_log, vcov. = NeweyWest(fit_log, lag = 22, prewhite = FALSE))
+
+cat("\n--- Levels ---\n");  print(nw_lvl)
+cat("\n--- Log-log ---\n"); print(nw_log)
+cat(sprintf("\nR^2 levels: %.3f | R^2 log: %.3f\n",
+            summary(fit_lvl)$r.squared,
+            summary(fit_log)$r.squared))
+
+# ---- 4. Residual diagnostics -----------------------------------------------
+cat("\n--- Ljung-Box on log residuals ---\n")
+print(Box.test(residuals(fit_log),   lag = 22, type = "Ljung-Box"))
+cat("\n--- Ljung-Box on squared log residuals ---\n")
+print(Box.test(residuals(fit_log)^2, lag = 22, type = "Ljung-Box"))
+
+# ---- 5. Save ---------------------------------------------------------------
+dir.create(here("models"), showWarnings = FALSE)
+dir.create(here("data"),   showWarnings = FALSE)
+saveRDS(fit_lvl, here("models", "har_rv_levels.rds"))
+saveRDS(fit_log, here("models", "har_rv_log.rds"))
+saveRDS(har,     here("data",   "har_design_matrix.rds"))
 
 # ============================================
 # MODEL 5: MARKOV-SWITCHING GARCH: REGIME BENCHMARK

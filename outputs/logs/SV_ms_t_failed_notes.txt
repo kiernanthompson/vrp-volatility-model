@@ -1,0 +1,4 @@
+MS-SV Student-t test run
+Severe divergences (180), Rhat > 2, low ESS
+Model rejected at feasibility stage
+Next: switch to Gaussian MS-SV
